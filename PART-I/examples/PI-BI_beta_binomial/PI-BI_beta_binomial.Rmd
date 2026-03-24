@@ -1,0 +1,556 @@
+---
+title: "Explaining Conjugate Priors Using a Binomial-Beta Example"
+author: "Joaquín Martínez-Minaya"
+date: "`r Sys.Date()`"
+linestretch: "1.5"
+
+output:   
+  bookdown::html_document2:
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r, warning = FALSE, message = FALSE}
+library(ggplot2)
+library(LearnBayes)
+```
+
+# Introduction
+Conjugate priors simplify Bayesian inference, as the posterior distribution is of the same form as the prior. In the case of a **binomial likelihood**, a **beta prior is conjugate**. This means that, if we have a binomial observation model and place a beta prior on the success probability, the resulting posterior will also follow a beta distribution. This makes computation more tractable and provides a neat probabilistic interpretation.
+
+To explain this more formally:
+
+- **Likelihood**: The number of successes \( y \) out of \( n \) trials is modeled using a binomial distribution:
+
+  \[
+  p(y | \pi) = \binom{n}{y} \pi^y (1 - \pi)^{n - y}
+  \]
+
+  where \( \pi \) is the probability of success.
+
+- **Prior**: We assume a Beta distribution as the prior for \( \pi \):
+
+  \[
+  p(\pi) = \text{Beta}(\alpha, \beta)
+  \]
+
+  where \( \alpha \) and \( \beta \) are hyperparameters that determine the shape of the prior distribution.
+
+- **Posterior**: Using Bayes' theorem, the posterior distribution for \( \pi \) given the data \( y \) is also a Beta distribution:
+
+  \[
+  p(\pi | y) = \text{Beta}(y + \alpha, n - y + \beta)
+  \]
+
+The conjugate nature of the Beta prior with the binomial likelihood allows the posterior to remain in the same family of distributions, making the update process straightforward by simply updating the parameters of the prior with the observed data.
+
+
+
+# The case of intracerebral hemorrhage
+A common application is in a clinical trial setting where we want to monitor the **incidence of an adverse event** such as symptomatic **intracerebral hemorrhage (SICH)** after administering a thrombolytic drug.
+
+<div style="float: left; margin-right: 20px; width: 50%;">
+  ```{r, echo=FALSE, out.width='100%'}
+  knitr::include_graphics('img1.png')
+  ```
+  
+</div>
+
+Patients suffer from a stroke when blood flow to the brain is blocked or significantly reduced, preventing brain tissue from getting the oxygen and nutrients it needs. There are two main types of stroke: ischemic and hemorrhagic. Ischemic strokes, which account for about 70% of all strokes, occur when an artery supplying blood to the brain becomes blocked, often due to atherosclerosis or an embolism. The primary goal in treating an ischemic stroke is to restore blood flow as quickly as possible, which can help limit brain damage.
+
+Thrombolytic drugs, such as **recombinant tissue plasminogen activator (rt-PA)**, are used to break up blood clots and reperfuse the blocked vessel. Early trials with thrombolytic drugs, such as streptokinase, showed significant risks, including higher rates of death and severe bleeding complications. However, later studies like the **ECASS (European Cooperative Acute Stroke Study)** trials demonstrated improved outcomes with the use of rt-PA, provided it was administered within a specific time window after stroke onset.
+
+One of the serious complications of thrombolytic treatment is **symptomatic intracerebral hemorrhage (SICH)**, which is a form of bleeding in the brain that can cause neurological deterioration. Monitoring the **incidence of SICH** is crucial to determine the safety of the drug. In the ECASS 3 study, a Data and Safety Monitoring Board (DSMB) was responsible for evaluating the safety of rt-PA during the trial by analyzing interim data on the occurrence of SICH.
+
+The ECASS 3 study included prior data from earlier trials, ECASS 1 and ECASS 2, as well as a meta-analysis of other studies involving rt-PA. During the first interim analysis of the ECASS 3 trial, the DSMB observed 50 patients who received rt-PA, and 10 of them developed SICH. The goal was to combine these results with prior information from ECASS 2, where 8 out of 100 patients treated with rt-PA experienced SICH or expert knowledge, in order to provide an updated estimate of the risk of SICH.
+
+# Bayesian Application
+
+In this section, we apply Bayesian inference to estimate the probability of **SICH after thrombolytic treatment**. We start by specifying a prior distribution for the unknown probability $\pi$, which represents the incidence of SICH under treatment.
+
+The posterior distribution is derived by combining prior knowledge (from previous studies) with new data collected during the current clinical trial. This approach provides a probabilistic update that accounts for both historical and new information. By specifying different types of prior distributions, we can assess the impact of prior beliefs on our posterior estimates.
+
+We will distinguish between four kind of priors: **an informative prior coming from other experiment, an informative prior coming from expert knowledge, an informative prior combining both and a non-informative prior**. For each of these cases, we will derive the posterior distribution and represent the results graphically to illustrate the effect of prior knowledge on the inference.
+
+
+## Informative Prior Analysis with Prior Expert Knowledge {.tabset}
+
+In Bayesian analysis, prior distributions can be derived using expert knowledge, allowing for flexibility in how prior beliefs are incorporated. Here, we use the DSMB neurologists' belief that the incidence of SICH lies between 8% and 18% to define an informative prior.
+
+### Graphical Representation for Expert Prior and Posterior
+
+The prior (\( \text{Beta}(20.96, 145.74) \)), likelihood (standardized), and posterior (\( \text{Beta}(30.96, 185.74) \)) are visualized as follows:
+
+```{r}
+# Define prior and posterior distributions
+x <- seq(0, 0.5, length.out = 100)
+prior_expert <- dbeta(x, 20.96, 145.74)
+posterior_expert <- dbeta(x, 30.96, 185.74)
+likelihood <- dbeta(x, 10 + 1, 50 - 10 + 1)  # Likelihood remains the same
+
+# Create data frame
+df_expert <- data.frame(
+  x = rep(x, 3),
+  y = c(prior_expert, likelihood, posterior_expert),
+  Distribution = rep(c("Expert Prior (Beta(20.96,145.74))", 
+                       "Likelihood (Standardized)", 
+                       "Posterior (Beta(30.96,185.74))"), each = 100)
+)
+
+# Plot
+ggplot(df_expert, aes(x, y, color = Distribution)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Expert-Defined Prior: Comparison of Prior, Likelihood, and Posterior",
+       x = expression(pi),
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+### Deriving the Prior
+
+The neurologists believe that the probability of SICH lies between 8% and 18%. Using the `LearnBayes` package and the function `beta.select`, we translate this qualitative belief into a Beta prior distribution. The function requires two quantiles of the distribution to compute the parameters \(\alpha_0\) and \(\beta_0\).
+
+```{r, warning=FALSE, message=FALSE}
+# Define expert beliefs
+quant025 <- list(p = 0.025, x = 0.08)
+quant975 <- list(p = 0.975, x = 0.18)
+prior_params <- beta.select(quant025, quant975)
+
+# Extract parameters
+alpha_0 <- prior_params[1]
+beta_0 <- prior_params[2]
+```
+
+
+From this computation, we obtain:
+\[
+\alpha_0 = 20.96, \quad \beta_0 = 145.74.
+\]
+
+This prior, \(\text{Beta}(20.96, 145.74)\), reflects the experts’ belief that the probability of SICH is most likely between 8% and 18%, with a moderate level of uncertainty.
+
+### Deriving the Posterior
+
+Using the ECASS 3 interim data (\( y = 10 \), \( n = 50 \)), the posterior distribution is updated as:
+\[
+p(\pi \mid y) \propto p(y \mid \pi) \cdot p(\pi).
+\]
+
+Substituting the prior parameters (\( \text{Beta}(20.96, 145.74) \)) and the likelihood (\( \text{Binomial}(50, \pi) \)):
+\[
+p(\pi \mid y) = \text{Beta}(\alpha_0 + y, \beta_0 + n - y),
+\]
+with:
+\[
+\alpha_0 + y = 20.96 + 10 = 30.96, \quad \beta_0 + n - y = 145.74 + 50 - 10 = 185.74.
+\]
+
+Thus, the posterior distribution is:
+\[
+p(\pi \mid y) = \text{Beta}(30.96, 185.74).
+\]
+
+This posterior combines the prior belief with the data from ECASS 3, providing an updated estimate of \( \pi \), the probability of SICH.
+
+## Informative Prior Analysis from Other Experiment {.tabset}
+
+The Bayesian approach allows us to incorporate prior knowledge from previous studies. In this case, we use the likelihood function derived from the ECASS 2 data to specify a Beta prior distribution for the ECASS 3 study.
+
+### Graphical Representation 
+
+The prior, likelihood (standardized), and posterior distributions can be visualized to illustrate how the data update our beliefs. The prior (\(\text{Beta}(9, 93)\)) reflects the information from ECASS 2, while the posterior (\(\text{Beta}(19, 133)\)) incorporates the additional evidence from ECASS 3:
+
+```{r}
+x <- seq(0, 0.5, length.out = 100)
+prior_beta_inf <- dbeta(x, 9, 93)
+likelihood <- dbeta(x, 10 + 1, 50 - 10 + 1)
+posterior_inf <- dbeta(x, 19, 133)
+
+df_inf <- data.frame(x = rep(x, 3),
+                     y = c(prior_beta_inf, likelihood, posterior_inf),
+                     Distribution = rep(c("Prior (Beta(9,93))", "Likelihood (Standardized)", "Posterior (Beta(19,133))"), each = 100))
+
+ggplot(df_inf, aes(x, y, color = Distribution)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Informative Prior: Comparison of Prior, Likelihood, and Posterior",
+       x = expression(pi),
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+### Deriving the Prior
+
+The ECASS 2 study provides key data:
+
+- \( y_0 = 8 \): Number of patients who experienced SICH.
+- \( n_0 = 100 \): Total number of patients treated with rt-PA.
+
+The likelihood from ECASS 2 is:
+\[
+L(\pi) = p(y_0 \mid \pi) = \binom{n_0}{y_0} \pi^{y_0} (1 - \pi)^{n_0 - y_0},
+\]
+which describes how plausible different values of \( \pi \), the probability of SICH, are given the observed data. The most likely value, the maximum likelihood estimate (MLE), is:
+\[
+\hat{\pi} = \frac{y_0}{n_0} = 0.08.
+\]
+
+This likelihood is not normalized to integrate to 1, but it has the same functional form as a Beta distribution. By interpreting the likelihood as a prior distribution, we assign parameters:
+\[
+\alpha_0 = y_0 + 1, \quad \beta_0 = n_0 - y_0 + 1,
+\]
+to obtain:
+\[
+p(\pi) = \text{Beta}(\alpha_0 = 9, \beta_0 = 93).
+\]
+
+This Beta prior reflects the information from ECASS 2, summarizing the evidence that the probability of SICH is centered around 8%, with most of the density between 0.02 and 0.18.
+
+### Deriving the Posterior
+
+In the interim analysis of the ECASS 3 study, new data are collected:
+
+- \( y = 10 \): Number of patients who experienced SICH.
+- \( n = 50 \): Total number of patients treated with rt-PA.
+
+The likelihood for the ECASS 3 data is:
+\[
+L(\pi) = p(y \mid \pi) = \binom{n}{y} \pi^y (1 - \pi)^{n - y}.
+\]
+
+The posterior distribution is derived by combining the prior from ECASS 2 with the likelihood from ECASS 3, using Bayes' theorem:
+\[
+p(\pi \mid y) \propto p(y \mid \pi) \cdot p(\pi).
+\]
+
+Substituting the forms of the prior and likelihood:
+\[
+p(\pi \mid y) \propto \pi^y (1 - \pi)^{n - y} \cdot \pi^{\alpha_0 - 1} (1 - \pi)^{\beta_0 - 1}.
+\]
+
+Simplifying:
+\[
+p(\pi \mid y) \propto \pi^{y + \alpha_0 - 1} (1 - \pi)^{n - y + \beta_0 - 1}.
+\]
+
+Recognizing this as the functional form of a Beta distribution:
+\[
+p(\pi \mid y) = \text{Beta}(\alpha_0 + y, \beta_0 + n - y).
+\]
+
+Substituting the parameters:
+\[
+p(\pi \mid y) = \text{Beta}(9 + 10, 93 + 50 - 10) = \text{Beta}(19, 133).
+\]
+
+This posterior combines the prior knowledge from ECASS 2 and the new data from ECASS 3, providing an updated estimate of \( \pi \), the probability of SICH under treatment.
+
+
+
+
+## Combining Prior Knowledge from Expert and Other Experiment {.tabset}
+
+In Bayesian analysis, it is often necessary to incorporate multiple sources of prior knowledge. This section explains how to combine a prior distribution derived from a previous experiment with a prior distribution based on expert knowledge, ensuring that both sources contribute to the analysis in a coherent manner.
+
+### Graphical Representation
+
+```{r}
+# Define parameters
+alpha_expert <- 20.96
+beta_expert <- 145.74
+alpha_study <- 9
+beta_study <- 93
+alpha_combined <- alpha_expert + alpha_study - 1
+beta_combined <- beta_expert + beta_study - 1
+alpha_posterior <- alpha_combined + 10
+beta_posterior <- beta_combined + 50 - 10
+
+# Generate densities
+x <- seq(0, 0.5, length.out = 100)
+prior_expert <- dbeta(x, alpha_expert, beta_expert)
+prior_study <- dbeta(x, alpha_study, beta_study)
+prior_combined <- dbeta(x, alpha_combined, beta_combined)
+likelihood <- dbeta(x, 10 + 1, 50 - 10 + 1) # Likelihood from ECASS 3 data
+posterior <- dbeta(x, alpha_posterior, beta_posterior)
+
+# Create data frame
+df <- data.frame(
+  x = rep(x, 5),
+  y = c(prior_expert, prior_study, prior_combined, likelihood, posterior),
+  Distribution = rep(
+    c("Prior (Expert)", "Prior (Study)", "Prior (Combined)", "Likelihood", "Posterior"),
+    each = 100
+  )
+)
+
+# Plot with customized colors and line types
+ggplot(df, aes(x, y, color = Distribution, linetype = Distribution)) +
+  geom_line(linewidth = 0.7) +
+  scale_color_manual(
+    values = c(
+      "Prior (Expert)" = "lightgreen",
+      "Prior (Study)" = "yellowgreen",
+      "Prior (Combined)" = "darkgreen",
+      "Likelihood" = "blue",
+      "Posterior" = "red"
+    )
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "Prior (Expert)" = "twodash",
+      "Prior (Study)" = "dashed",
+      "Prior (Combined)" = "solid",
+      "Likelihood" = "solid",
+      "Posterior" = "solid"
+    )
+  ) +
+  labs(title = "Comparison of Priors, Likelihood, and Posterior",
+       x = expression(pi),
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+### Deriving the Combined Prior
+
+When two independent sources of prior information are available—one derived from a previous experiment and another based on expert beliefs—they can be combined mathematically under the assumption of independence. This process is particularly straightforward when both priors are Beta distributions, as the resulting combined prior remains within the Beta family.
+
+#### Prior from Expert Belief
+
+The prior based on expert knowledge is represented as:
+\[
+p_\text{expert}(\pi) = \text{Beta}(\alpha_\text{expert}, \beta_\text{expert}),
+\]
+where:
+\[
+\alpha_\text{expert} = 20.96, \quad \beta_\text{expert} = 145.74.
+\]
+
+#### Prior from Previous Experiment
+
+The prior from the ECASS 2 study is:
+\[
+p_\text{study}(\pi) = \text{Beta}(\alpha_\text{study}, \beta_\text{study}),
+\]
+where:
+\[
+\alpha_\text{study} = 9, \quad \beta_\text{study} = 93.
+\]
+
+#### Combining Priors
+
+Assuming independence, the two priors are multiplied:
+\[
+p_\text{combined}(\pi) \propto p_\text{expert}(\pi) \cdot p_\text{study}(\pi).
+\]
+
+This results in:
+\[
+p_\text{combined}(\pi) = \text{Beta}(\alpha_\text{combined}, \beta_\text{combined}),
+\]
+where:
+\[
+\alpha_\text{combined} = \alpha_\text{expert} + \alpha_\text{study} - 1 = 20.96 + 9 - 1 = 28.96,
+\]
+\[
+\beta_\text{combined} = \beta_\text{expert} + \beta_\text{study} - 1 = 145.74 + 93 - 1 = 237.74.
+\]
+
+#### Resulting Combined Prior
+
+The combined prior is:
+\[
+p_\text{combined}(\pi) = \text{Beta}(28.96, 237.74).
+\]
+
+### Deriving Posterior
+
+The combined prior is updated with the ECASS 3 interim data (\(y = 10\), \(n = 50\)):
+\[
+p(\pi \mid y) \propto p_\text{combined}(\pi) \cdot L(\pi),
+\]
+where:
+\[
+L(\pi) = \binom{n}{y} \pi^y (1 - \pi)^{n - y}.
+\]
+
+Combining the prior and likelihood:
+\[
+p(\pi \mid y) = \text{Beta}(\alpha_\text{posterior}, \beta_\text{posterior}),
+\]
+with:
+\[
+\alpha_\text{posterior} = \alpha_\text{combined} + y = 28.96 + 10 = 38.96,
+\]
+\[
+\beta_\text{posterior} = \beta_\text{combined} + n - y = 237.74 + 50 - 10 = 277.74.
+\]
+
+This posterior reflects the updated belief about \(\pi\), the probability of SICH, combining both prior sources and the ECASS 3 data.
+
+
+## Non-Informative Prior Analysis {.tabset}
+
+Non-informative priors are commonly used in Bayesian analysis when we wish to minimize the influence of prior beliefs and let the data primarily drive the inference. For this example, we use a uniform prior, which is a special case of the Beta distribution.
+
+### Graphical Representation
+
+The prior (\( \text{Beta}(1, 1) \)), likelihood (standardized), and posterior (\( \text{Beta}(11, 41) \)) are visualized as follows:
+
+```{r}
+# Define prior and posterior distributions
+x <- seq(0, 0.5, length.out = 100)
+prior_noninf <- dbeta(x, 1, 1)
+posterior_noninf <- dbeta(x, 11, 41)
+likelihood <- dbeta(x, 10 + 1, 50 - 10 + 1)  # Likelihood remains the same
+
+# Create data frame
+df_noninf <- data.frame(
+  x = rep(x, 3),
+  y = c(prior_noninf, likelihood, posterior_noninf),
+  Distribution = rep(c("Non-Informative Prior (Beta(1,1))", 
+                       "Likelihood (Standardized)", 
+                       "Posterior (Beta(11,41))"), each = 100)
+)
+
+# Plot
+ggplot(df_noninf, aes(x, y, color = Distribution)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Non-Informative Prior: Comparison of Prior, Likelihood, and Posterior",
+       x = expression(pi),
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+
+### Defining the Prior
+
+A uniform prior on \(\pi\) assumes no strong prior belief about its value, giving equal probability to all values in the interval \([0, 1]\). This corresponds to a Beta distribution with parameters:
+\[
+\alpha_0 = 1, \quad \beta_0 = 1,
+\]
+or equivalently:
+\[
+\text{Beta}(1, 1).
+\]
+
+The uniform prior reflects complete uncertainty about the probability of SICH before observing any data.
+
+### Deriving the Posterior
+
+Using the ECASS 3 interim data (\( y = 10 \), \( n = 50 \)), the posterior distribution is updated as:
+\[
+p(\pi \mid y) \propto p(y \mid \pi) \cdot p(\pi).
+\]
+
+Substituting the prior parameters (\( \text{Beta}(1, 1) \)) and the likelihood (\( \text{Binomial}(50, \pi) \)):
+\[
+p(\pi \mid y) = \text{Beta}(\alpha_0 + y, \beta_0 + n - y),
+\]
+with:
+\[
+\alpha_0 + y = 1 + 10 = 11, \quad \beta_0 + n - y = 1 + 50 - 10 = 41.
+\]
+
+Thus, the posterior distribution is:
+\[
+p(\pi \mid y) = \text{Beta}(11, 41).
+\]
+
+This posterior reflects the data's influence while starting with minimal prior assumptions.
+
+
+
+
+
+## Comparison of Posterior Distributions
+
+To better understand the impact of different priors on the posterior distributions, we compare the posteriors derived from the expert prior, the study prior, the combined prior, and the non-informative prior. This comprehensive comparison helps illustrate how different sources of prior information influence the resulting inference.
+
+```{r}
+# Define parameters for all posteriors
+alpha_noninf <- 11
+beta_noninf <- 41
+posterior_noninf <- dbeta(x, alpha_noninf, beta_noninf)
+
+# Generate densities for the posteriors
+posterior_study <- dbeta(x, alpha_study + 10, beta_study + 50 - 10)
+posterior_expert <- dbeta(x, alpha_expert + 10, beta_expert + 50 - 10)
+posterior_combined <- dbeta(x, alpha_posterior, beta_posterior)
+
+# Create data frame
+df_posteriors <- data.frame(
+  x = rep(x, 4),
+  y = c(posterior_study, posterior_expert, posterior_combined, posterior_noninf),
+  Distribution = rep(
+    c("Post(Study)", 
+      "Post(Expert)", 
+      "Post(Combined)", 
+      "Post(Non-Informative)"),
+    each = 100
+  )
+)
+
+# Plot with customized colors and line types
+ggplot(df_posteriors, aes(x, y, color = Distribution, linetype = Distribution)) +
+  geom_line(linewidth = 0.7) +
+  scale_color_manual(
+    values = c(
+      "Post(Study)" = "orange",
+      "Post(Expert)" = "purple",
+      "Post(Combined)" = "darkgreen",
+      "Post(Non-Informative)" = "brown"
+    )
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "Post(Study)" = "dashed",
+      "Post(Expert)" = "twodash",
+      "Post(Combined)" = "solid",
+      "Post(Non-Informative)" = "dotted"
+    )
+  ) +
+  labs(title = "Comparison of Posterior Distributions",
+       x = expression(pi),
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+
+
+# Conclusion
+
+This case study highlights the power of Bayesian inference to integrate multiple sources of information, leading to nuanced and credible estimates of uncertain parameters. Each prior scenario demonstrates how Bayesian analysis allows for different levels of prior knowledge:
+
+- The non-informative prior scenario highlights the data's dominant role when prior knowledge is minimal.
+- The informative prior scenarios demonstrate how historical data and expert beliefs can shape posterior inference.
+- The combined prior scenario showcases how Bayesian methods unify diverse information sources to provide comprehensive updates.
+
+In medical studies, this flexibility is invaluable for synthesizing historical data, expert opinions, and current experimental results to inform clinical decisions and safety monitoring.
+
+# Bibliography
+
+Lesaffre, E., & Lawson, A. B. (2012). *Bayesian Biostatistics*. John Wiley & Sons.
+
+
+# Exercises
+
+## Exercise 1
+Calculate a 95% credible interval for the probability of suffered SICH.
+
+## Exercise 2
+Experts considers that if the probability of suffering from symptomatic intracerebral hemorrhage (SICH) is greater than 0.15, the ECASS 3 will not continue. Should the ECASS 3 continue? 
+
+
+
