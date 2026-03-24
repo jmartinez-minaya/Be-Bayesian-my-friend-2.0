@@ -289,9 +289,9 @@ print(summary_odds_ratios_each)
 
 The interpretation of the parameters is as follows:
 
-- For the odds ratio of age60 with a posterior median of 1.926, the implication is that **the odds of a heart attack for a person older than 60 years is approximately 1.926 times the odds of a heart attack for a person younger than 60**. 
+- For the odds ratio of age60 with a posterior median of 1.93, the implication is that **the odds of a heart attack for a person older than 60 years is approximately 1.93 times the odds of a heart attack for a person younger than 60**. 
 
-- For the odds ratio of sbp140, the median is 2.773, implying that **the odds of a heart attack for a person with a systolic blood pressure greater than 140 mmHg are approximately 2.773 times the odds for a person with lower blood pressure**. 
+- For the odds ratio of sbp140, the median is 2.72, implying that **the odds of a heart attack for a person with a systolic blood pressure greater than 140 mmHg are approximately 2.72 times the odds for a person with lower blood pressure**. 
 
 - The 95% credible intervals for both odds ratios do not include the value 1, suggesting that both age and SBP have a relevant effect on the occurrence of a heart attack.
 
