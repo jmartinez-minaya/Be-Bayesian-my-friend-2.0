@@ -1,6 +1,6 @@
 # Be Bayesian my Friend 2.0.
 
-Welcome to the course **“Bayesian Learning Methods”**, a continuation of the short course  
+Welcome to the course **Be Bayesian my Friend 2.0.**, a continuation of the short course  
 [**Be Bayesian, My Friend**](https://github.com/jmartinez-minaya/Be-Bayesian-my-friend).
 
 This is a **20-hour course** designed to provide a comprehensive introduction to **Bayesian inference**, from foundational concepts to modern methodologies such as **MCMC**, **JAGS**, **stan**, **brms**, **INLA** and **inlabru**, including **hierarchical** and **spatial models**.  
@@ -121,7 +121,6 @@ BAYESIANLEARNING/
 │   │   └── PI_bayesian_inference.pdf
 │   └── examples/
 │       └── PI-BI_beta_binomial/
-│           └── PI-BI_beta_binomial.Rmd
 │
 ├── PART-II/
 │   ├── theory/
@@ -129,9 +128,6 @@ BAYESIANLEARNING/
 │   ├── examples/
 │   └── exercises/
 │       └── PII-diabetes/
-│           ├── PII-diabetes.Rmd
-│           ├── diabetes.xlsx
-│           └── diabetes.png
 │
 ├── PART-III/
 │   ├── theory/
@@ -145,7 +141,7 @@ BAYESIANLEARNING/
 │
 ├── PART-IV/
 │   ├── theory/
-│   │   └── PIV_spatial.html
+│   │   └── PIV_spatial.pdf
 │   ├── examples/
 │   │   ├── PIV-INLA-disease-mapping/
 │   │   ├── PIV-inlabru-geostatistics/
