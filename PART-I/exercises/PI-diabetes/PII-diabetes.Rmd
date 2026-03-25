@@ -1,0 +1,97 @@
+---
+title: "Exercise 1: conjugate priors. Beta-Binomial"
+author: "Joaquín Martínez-Minaya"
+date: "`r Sys.Date()`"
+linestretch: "1.5"
+
+output:   
+  bookdown::html_document2:
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(runjags)
+library(brms)
+library(coda)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+```
+
+# Introduction
+
+This exercise focuses on predicting diabetes using a dataset provided by the National Institute of Diabetes and Digestive and Kidney Diseases (https://www.kaggle.com/datasets/mathchi/diabetes-data-set). The main goal is to determine whether a patient has diabetes based on various diagnostic features. The dataset contains information about female patients of Pima Indian heritage who are at least 21 years old and includes an additional variable indicating the different zones of the patients, ranging from 'zona1' to 'zona30'.
+
+<div style="float: right; margin-right: 20px; width: 50%;">
+  ```{r, echo=FALSE, out.width='100%'}
+  knitr::include_graphics('diabetes.png')
+  ```
+</div>
+
+
+The dataset includes a range of medical measurements that are useful in predicting the likelihood of diabetes. These features are:
+
+- **Pregnancies**: Number of times a patient has been pregnant.
+- **Glucose**: Plasma glucose levels after an oral glucose tolerance test.
+- **BloodPressure**: Diastolic blood pressure (mm Hg).
+- **SkinThickness**: Triceps skin fold thickness (mm).
+- **Insulin**: 2-Hour serum insulin levels (mu U/ml).
+- **BMI**: Body mass index (weight in kg/(height in m)^2).
+- **DiabetesPedigreeFunction**: Diabetes pedigree function, representing the patient's hereditary risk.
+- **Age**: The patient's age (in years).
+- **Zone**: The newly added variable indicating the patient's zone, ranging from 'zona1' to 'zona30'.
+- **Outcome**: A binary indicator representing whether the patient has been diagnosed with diabetes (0 or 1).
+
+
+
+
+# Data
+
+```{r}
+  data_diab <- read_xlsx("diabetes.xlsx")
+head(data_diab)
+```
+
+
+# Exercise 1: Beta-Binomial conjugacy
+
+In this first part, ignore all covariates and focus only on the binary variable `Outcome`.
+
+Let \(\pi\) denote the probability that a randomly selected patient has diabetes.
+
+## 1. Prior specification
+
+Prior information suggests that the prevalence of diabetes is approximately 12%.
+
+- Propose a prior distribution \(\pi \sim \text{Beta}(a,b)\) such that its mean is 0.12.
+- Choose two different priors:
+  - one weakly informative,
+  - one more informative.
+
+## 2. Posterior distribution
+
+Using the `Outcome` variable in the dataset:
+
+- compute \(n\), the total number of patients;
+- compute \(y\), the number of patients diagnosed with diabetes.
+
+Assume the model:
+\[
+Y \mid \pi \sim \text{Binomial}(n,\pi), \qquad \pi \sim \text{Beta}(a,b).
+\]
+
+- Derive the posterior distribution of \(\pi\).
+- Compute the posterior mean of \(\pi\).
+
+## 3. Posterior interpretation
+
+- Compute a 95% credible interval for \(\pi\).
+- Compare the posterior mean with the observed proportion \(y/n\).
+- Briefly interpret the results in the context of diabetes prevalence in female patients of Pima Indian heritage.
+

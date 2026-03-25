@@ -2877,6 +2877,14 @@ p(\pi | y) = \text{Beta}(y + \alpha, n - y + \beta)
 <p>In Bayesian analysis, prior distributions can be derived using expert knowledge, allowing for flexibility in how prior beliefs are incorporated. Here, we use the DSMB neurologists’ belief that the incidence of SICH lies between 8% and 18% to define an informative prior.</p>
 <div id="graphical-representation-for-expert-prior-and-posterior" class="section level3" number="3.1.1">
 <h3><span class="header-section-number">3.1.1</span> Graphical Representation for Expert Prior and Posterior</h3>
+<p>Prior knowledge can be incorporated by specifying a <strong>Beta distribution through its quantiles</strong>.<br />
+In this case, expert beliefs suggest that the probability of SICH lies between 8% and 18% with high confidence (approximately 95%).</p>
+<p>We translate these beliefs into a Beta prior by matching its 2.5% and 97.5% quantiles to 0.08 and 0.18, respectively:</p>
+<pre class="r"><code>quant025 &lt;- list(p = 0.025, x = 0.08)
+quant975 &lt;- list(p = 0.975, x = 0.18)
+
+beta.select(quant025, quant975)</code></pre>
+<pre><code>## [1]  20.96 145.74</code></pre>
 <p>The prior (<span class="math inline">\(\text{Beta}(20.96, 145.74)\)</span>), likelihood (standardized), and posterior (<span class="math inline">\(\text{Beta}(30.96, 185.74)\)</span>) are visualized as follows:</p>
 <pre class="r"><code># Define prior and posterior distributions
 x &lt;- seq(0, 0.5, length.out = 100)
