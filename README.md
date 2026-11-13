@@ -189,7 +189,7 @@ Applied Statistics and Operations Research and Quality (DEIOAC)
 Universitat Politècnica de València (UPV)
 
 📧 **Email:** [jmarmin@eio.upv.es](mailto:jmarmin@eio.upv.es)  
-🌐 **Website:** [https://github.com/jmartinez-minaya](https://github.com/jmartinez-minaya)  
+🌐 **Website:** [https://jmartinez-minaya.webs.upv.es/](https://jmartinez-minaya.webs.upv.es/)  
 
 ---
 
