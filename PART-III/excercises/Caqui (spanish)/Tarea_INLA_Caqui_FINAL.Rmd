@@ -1,0 +1,428 @@
+---
+title: "Sistema de alerta temprana de la mancha foliar del caqui: regresión Beta bayesiana con INLA"
+author: "Joaquín Martínez-Minaya"
+date: "`r Sys.Date()`"
+linestretch: "1.5"
+
+output:   
+  bookdown::html_document2:
+  #theme: cerulean
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+Las **cuatro preguntas** aparecen intercaladas junto a las salidas necesarias para resolverlas. El código R está proporcionado; cada pregunta incluye una solución desplegable.
+
+Esta práctica está basada en una versión simplificada del artículo [Martínez-Minaya et al. (2021)](https://apsjournals.apsnet.org/doi/full/10.1094/PHYTO-08-20-0359-R). El desarrollo completo puede consultarse en el [repositorio del proyecto](https://bitbucket.org/joaquin-martinez-minaya/betapathogen/src).
+
+```{r, warning = FALSE, message = FALSE}
+  library(dplyr)
+  library(ggplot2)
+  library(INLA)
+  library(readxl)
+``` 
+# Contexto: un sistema de alerta temprana
+
+La **mancha foliar del caqui** (*Circular Leaf Spot*, CLS), causada por el hongo *Plurivorosphaerella nawae*, puede provocar lesiones necróticas, defoliación y caída de frutos. Durante la primavera, el hongo libera ascosporas que pueden infectar las hojas del caqui. Por tanto, anticipar la liberación de ascosporas resulta útil para programar los tratamientos fitosanitarios.
+
+Se desea construir un **sistema de alerta temprana** que utilice los **grados-día acumulados** para determinar cuándo debe empezar el agricultor a tratar. Se dispone de datos recogidos en L'Alcúdia (Valencia) entre 2010 y 2015.
+
+
+# Datos de L'Alcúdia
+
+Las variables utilizadas son:
+
+- `y`: proporción acumulada de ascosporas liberadas, disponible en el fichero de datos y con valores estrictamente entre 0 y 1.
+- `year`: año de observación.
+- `dd`: grados-día acumulados desde el 1 de enero, con temperatura base 0 °C, **expresados en centenas de grados-día**. Por ejemplo, `dd = 15` equivale a 1 500 grados-día.
+
+**En toda la práctica se utilizan directamente los valores del archivo Excel.** Los umbrales del sistema de alerta se proporcionan en la hoja `umbrales` del mismo archivo.
+
+```{r,echo= TRUE, warning= FALSE, message= FALSE}
+data <- readxl::read_excel("datos_alcudia_transformados_BANDAS.xlsx", sheet = "datos")
+data$year <- factor(data$year)
+data <- data %>%
+  dplyr::select(y, year, dd)
+head(data)
+```
+
+
+# Análisis descriptivo
+```{r}
+  ggplot(data) +
+  geom_point(aes(x = dd, y = y, col = year))+
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  scale_color_brewer(palette="Dark2") +
+  xlab("dd ( x 100)")
+
+```
+
+
+# Modelo: regresión Beta bayesiana jerárquica
+
+Para modelizar una proporción continua en (0, 1), utilizamos una distribución Beta parametrizada por su **media** $\mu_i$ y su **precisión** $\phi$. Su parametrización es $\operatorname{Beta}(\mu_i\phi,(1-\mu_i)\phi)$, con enlace logit para $\mu_i$. Aunque la respuesta es Beta, el predictor y sus efectos aleatorios forman un **campo latente gaussiano**.
+
+
+
+
+```{r priors-explicitas}
+# Priors explícitas para que los tres niveles del LGM sean identificables
+prior_fijos <- list(mean = 0, prec = 0.001,
+                     mean.intercept = 0, prec.intercept = 0.001)
+# phi ~ Gamma(1, 0.01), con Gamma parametrizada por forma y tasa.
+prior_beta <- list("precision parameter" = list(prior = "loggamma", param = c(1, 0.01)))
+```
+
+# Ajuste de los tres modelos {.tabset}
+
+## Modelo 0: intercepto
+```{r}
+formula0 <- y ~ + 1 
+mod0 <- inla(formula0, 
+             family            = "beta",
+             data              = data,
+             control.family    = list(link  = "logit", hyper = prior_beta),
+             control.fixed     = prior_fijos,
+             control.compute   = list(dic    = TRUE, 
+                                      cpo    = TRUE, 
+                                      waic   = TRUE),
+             control.predictor = list(compute = TRUE))
+
+```
+
+
+
+## Modelo 1: grados-día
+
+```{r}
+formula1 <- y ~ + 1 + dd 
+
+mod1 <- inla(formula1, 
+             family            = "beta",
+             data              = data,
+             control.family    = list(link  = "logit", hyper = prior_beta),
+             control.fixed     = prior_fijos,
+             control.compute   = list(dic    = TRUE, 
+                                      cpo    = TRUE, 
+                                      waic   = TRUE),
+             control.predictor = list(compute = TRUE))
+
+```
+
+
+## Modelo 2: grados-día y año aleatorio
+
+Para introducir un efecto aleatorio del año, creamos el siguiente índice:
+
+```{r}
+  data$year_ind <- as.numeric(data$year)
+```   
+
+```{r}
+prior1_tau <- list(prec = list(prior = 'pc.prec', param = c(5, 0.01)))
+
+formula2 <- y ~ + 1 + dd + 
+  f(year_ind, model='iid', 
+    hyper = prior1_tau) 
+
+mod2 <- inla(formula2, 
+             family            = "beta",
+             data              = data,
+             control.family    = list(link  = "logit", hyper = prior_beta),
+             control.fixed     = prior_fijos,
+             control.compute   = list(config = TRUE,
+                                      dic    = TRUE, 
+                                      cpo    = TRUE, 
+                                      waic   = TRUE),
+             control.predictor = list(compute = TRUE))
+
+```
+
+
+# Pregunta 1. Formulación de los tres niveles
+
+Los tres modelos anteriores se han ajustado mediante R-INLA. **Escribe su formulación matemática siguiendo exactamente los tres niveles de las diapositivas:**
+
+1. **Nivel 1 — verosimilitud:** especifica $p(\mathbf y\mid\boldsymbol\theta,\boldsymbol\psi_1)$, la distribución Beta, la función de enlace y el predictor lineal.
+2. **Nivel 2 — campo latente gaussiano:** identifica $\boldsymbol\theta$ y escribe $p(\boldsymbol\theta\mid\boldsymbol\psi_2)$, indicando su media y su matriz de precisión.
+3. **Nivel 3 — hiperparámetros:** identifica $\boldsymbol\psi=(\boldsymbol\psi_1,\boldsymbol\psi_2)$ y escribe sus **distribuciones a priori explícitas**.
+
+**Para cada modelo, indica cuántas observaciones, componentes latentes e hiperparámetros hay en cada nivel.**
+
+<details markdown="1">
+<summary><strong>Ver solución orientativa — Pregunta 1</strong></summary>
+
+**Notación:** $n=299$ observaciones; $a(i)\in\{1,\ldots,6\}$ identifica el año de la observación $i$; $d_i=dd_i$ representa centenas de grados-día. En los tres modelos $\psi_1=(\phi)$; la distribución Gamma se parametriza con **forma y tasa**.
+
+**Modelo 0 — $N=1$ variable latente y $1$ hiperparámetro**
+
+- **Nivel 1 (verosimilitud, $n$ respuestas):**
+  $$p(\mathbf y\mid\boldsymbol\theta_0,\boldsymbol\psi_1)=\prod_{i=1}^n \mathrm{Beta}(y_i\mid\mu_i\phi,(1-\mu_i)\phi),\qquad\mathrm{logit}(\mu_i)=\eta_i=\beta_0.$$
+- **Nivel 2 (campo latente, dimensión $N=1$):**
+  $$\boldsymbol\theta_0=(\beta_0),\qquad \beta_0\sim N(0,1000).$$
+- **Nivel 3 (hiperparámetros, dimensión $1$):**
+  $$\boldsymbol\psi=(\phi),\qquad\phi\sim\mathrm{Gamma}(1,0.01).$$
+
+**Modelo 1 — $N=2$ variables latentes y $1$ hiperparámetro**
+
+- **Nivel 1 (verosimilitud, $n$ respuestas):**
+  $$p(\mathbf y\mid\boldsymbol\theta_1,\boldsymbol\psi_1)=\prod_{i=1}^n \mathrm{Beta}(y_i\mid\mu_i\phi,(1-\mu_i)\phi),\qquad\mathrm{logit}(\mu_i)=\eta_i=\beta_0+\beta_1d_i.$$
+- **Nivel 2 (campo latente, dimensión $N=2$):**
+  $$\boldsymbol\theta_1=(\beta_0,\beta_1)^T\sim N_2(\mathbf0,\mathrm{diag}(0.001,0.001)^{-1}).$$
+- **Nivel 3 (hiperparámetros, dimensión $1$):**
+  $$\boldsymbol\psi=(\phi),\qquad\phi\sim\mathrm{Gamma}(1,0.01).$$
+
+**Modelo 2 — $N=8$ variables latentes y $2$ hiperparámetros**
+
+- **Nivel 1 (verosimilitud, $n$ respuestas):**
+  $$p(\mathbf y\mid\boldsymbol\theta_2,\boldsymbol\psi_1)=\prod_{i=1}^n \mathrm{Beta}(y_i\mid\mu_i\phi,(1-\mu_i)\phi),\qquad\mathrm{logit}(\mu_i)=\eta_i=\beta_0+\beta_1d_i+u_{a(i)}.$$
+- **Nivel 2 (campo latente, dimensión $N=8$):**
+  $$\boldsymbol\theta_2=(\beta_0,\beta_1,u_1,\ldots,u_6)^T\mid\tau_u\sim N_8(\mathbf0,\mathbf Q(\tau_u)^{-1}),$$
+  $$\mathbf Q(\tau_u)=\mathrm{diag}(0.001,0.001,\tau_u,\ldots,\tau_u),\quad u_j\mid\tau_u\overset{iid}{\sim}N(0,\tau_u^{-1}).$$
+- **Nivel 3 (hiperparámetros, dimensión $2$):**
+  $$\boldsymbol\psi=(\phi,\tau_u),\quad \phi\sim\mathrm{Gamma}(1,0.01),\quad\tau_u\sim\mathrm{PC.prec}(5,0.01),$$
+  donde la última prior se caracteriza por $P(\sigma_u>5)=0.01$, siendo $\sigma_u=\tau_u^{-1/2}$. Se asumen priors independientes para $\phi$ y $\tau_u$.
+
+**Resumen de dimensiones:**
+
+| Modelo | Nivel 1: observaciones | Nivel 2: componentes del campo latente | Nivel 3: hiperparámetros |
+|:--|--:|--:|--:|
+| 0 | $n=299$ | $1$ ($\beta_0$) | $1$ ($\phi$) |
+| 1 | $n=299$ | $2$ ($\beta_0,\beta_1$) | $1$ ($\phi$) |
+| 2 | $n=299$ | $8$ ($\beta_0,\beta_1,u_1,\ldots,u_6$) | $2$ ($\phi,\tau_u$) |
+
+**Importante:** $\phi$ (precisión de la Beta) y $\tau_u$ (precisión del efecto anual) tienen funciones diferentes. Los $n$ predictores $\eta_i$ son funciones del campo latente, no $n$ coeficientes libres adicionales.
+
+</details>
+
+
+
+# Comparación de los modelos 
+```{r}
+  selection <- data.frame(DIC  = c(mod0$dic$dic, mod1$dic$dic, mod2$dic$dic),
+                        WAIC = c(mod0$waic$waic, mod1$waic$waic, mod2$waic$waic),
+                        LCPO = c(-mean(log(mod0$cpo$cpo)),
+                                 -mean(log(mod1$cpo$cpo)),
+                                 -mean(log(mod2$cpo$cpo))))
+rownames(selection)<- c("Null model", "DD", "DD + year")
+selection
+
+
+```
+
+# Resúmenes posteriores del Modelo 2 {.tabset} 
+
+## Distribución posterior de los efectos fijos
+```{r}
+  mod2$summary.fixed %>% round(., 4)
+```
+
+
+```{r, fig.asp = 0.5}
+post_margs <- do.call(rbind, lapply(names(mod2$marginals.fixed), function(nombre) {
+  densidad <- as.data.frame(inla.smarginal(mod2$marginals.fixed[[nombre]]))
+  densidad$variable <- nombre
+  densidad
+}))
+
+ggplot(post_margs, aes(x = x, y = y)) +
+  geom_line(aes(color = variable)) +
+  facet_wrap(~variable, ncol = 2, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+```
+
+
+## Distribución posterior de los hiperparámetros
+```{r}
+  mod2$summary.hyperpar %>% round(., 4)
+```
+
+
+```{r, fig.asp = 0.5}
+# Desviación típica del efecto aleatorio del año  
+nombre_tau <- grep("Precision for year_ind", names(mod2$marginals.hyperpar),
+                   value = TRUE, ignore.case = TRUE)
+stopifnot(length(nombre_tau) == 1L)
+sd_re <- inla.tmarginal(function(x) 1/sqrt(x),
+                        mod2$marginals.hyperpar[[nombre_tau]])
+
+# Precisión de la distribución Beta
+nombre_phi <- grep("beta observations", names(mod2$marginals.hyperpar),
+                   value = TRUE, ignore.case = TRUE)
+stopifnot(length(nombre_phi) == 1L)
+prec_beta <- inla.smarginal(mod2$marginals.hyperpar[[nombre_phi]])
+
+# Unimos las dos distribuciones  
+hyperpars <- rbind(data.frame(sd_re, hyp1 = "sigma-year"),
+                     data.frame(prec_beta, hyp1 = "prec-beta"))
+hyperpars$hyp1 <- factor(hyperpars$hyp1)
+
+# Gráfico
+ggplot(hyperpars, aes(x = x, y = y)) +
+    geom_line(aes(color = hyp1), linewidth = 1.3) + 
+    facet_wrap(~ hyp1, ncol = 2, scales = "free") +
+    theme_bw() +
+    theme(legend.position = "none")
+    
+```
+
+
+# Probabilidad posterior de que el efecto de los grados-día sea positivo
+
+```{r}
+  p1 <- 1 - inla.pmarginal(0, mod2$marginals.fixed$dd)
+```
+Para el Modelo 2, $P(\beta_1 > 0 \mid \mathbf{y}) =$ `r round(p1, 4)`.
+
+
+# Distribución posterior de las odds ratios por 100 grados-día
+
+```{r, fig.asp = 0.48}
+# dd está medido en centenas de grados-día: OR_100 = exp(beta_1).
+# Transformamos toda la marginal posterior, no únicamente su media.
+posterior_or100 <- inla.tmarginal(function(x) exp(x), mod2$marginals.fixed[["dd"]])
+media_or100 <- inla.emarginal(identity, posterior_or100)
+ic_or100 <- inla.qmarginal(c(0.025, 0.975), posterior_or100)
+prob_or100_mayor1 <- 1 - inla.pmarginal(1, posterior_or100)
+
+resumen_or100 <- data.frame(
+  `Media posterior` = media_or100,
+  `Percentil 2.5 %` = ic_or100[1],
+  `Percentil 97.5 %` = ic_or100[2],
+  `P(OR > 1)` = prob_or100_mayor1,
+  check.names = FALSE
+)
+round(resumen_or100, 4)
+
+or_dens <- as.data.frame(inla.smarginal(posterior_or100))
+colnames(or_dens)[1:2] <- c("x", "y")
+ggplot(or_dens, aes(x = x, y = y)) +
+  geom_line(linewidth = 1.05) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds ratio por 100 grados-día", y = "Densidad posterior") +
+  theme_bw()
+```
+
+# Pregunta 2. Interpretación de los grados-día
+
+Para el **Modelo 2**:
+
+1. Obtén la media a posteriori, el intervalo de credibilidad del 95 % de $\beta_1$ y $P(\beta_1>0\mid\mathbf y)$.
+2. Calcula la **distribución posterior de la razón de odds (*odds ratio*)** asociada a un incremento de **100 grados-día**. Indica su media posterior, intervalo de credibilidad del 95 % y $P(\mathrm{OR}_{100}>1\mid\mathbf y)$.
+3. **Interpreta los resultados** en el contexto de la liberación de ascosporas y de la enfermedad del caqui.
+
+<details markdown="1">
+<summary><strong>Ver solución orientativa — Pregunta 2</strong></summary>
+
+El coeficiente de interés aparece como `dd` en `mod2$summary.fixed`. La media posterior es `r round(mod2$summary.fixed["dd", "mean"], 5)`; el intervalo creíble del 95 % es [`r round(mod2$summary.fixed["dd", "0.025quant"], 5)`, `r round(mod2$summary.fixed["dd", "0.975quant"], 5)`] y $P(\beta_1>0\mid\mathbf y)=$ `r round(p1, 5)`.
+
+Como `dd` está expresado en **centenas de grados-día**, un incremento de 100 grados-día corresponde a $\Delta dd=1$. Por tanto:
+
+$$\mathrm{OR}_{100}=\frac{\mu(dd+1)/[1-\mu(dd+1)]}{\mu(dd)/[1-\mu(dd)]}=\exp(\beta_1).$$
+
+La **distribución posterior** de $\mathrm{OR}_{100}$ se obtiene transformando la marginal de $\beta_1$, no exponenciando solamente su media. Su media posterior es `r round(media_or100, 4)`, su intervalo de credibilidad del 95 % es [`r round(ic_or100[1], 4)`, `r round(ic_or100[2], 4)`] y $P(\mathrm{OR}_{100}>1\mid\mathbf y)=$ `r round(prob_or100_mayor1, 5)`.
+
+Si la OR es mayor que 1, al acumular 100 grados-día adicionales **aumentan las odds de la proporción media modelizada**, manteniendo constante el efecto anual. Por ejemplo, una OR de 1.2 significa un aumento del 20 % de esas odds, **no** un incremento de 20 puntos porcentuales en las ascosporas liberadas. Esto apoya el uso de grados-día para anticipar la disponibilidad del inóculo.
+</details>
+
+
+
+# Pregunta 3. Efecto aleatorio anual
+
+**¿Mantendrías el efecto aleatorio del año en el modelo?** Justifica tu decisión utilizando los resultados obtenidos. Explica qué representa ese efecto y por qué podría ser relevante para un sistema de alerta temprana.
+
+<details markdown="1">
+<summary><strong>Ver solución orientativa — Pregunta 3</strong></summary>
+
+Para responder a esta pregunta nos fijamos conjuntamente en: (i) los cambios en DIC, WAIC y, opcionalmente, LCPO entre los Modelos 1 y 2; (ii) la distribución posterior de $\sigma_u$, desviación típica entre años. Valores observados al ejecutar el documento: DIC (Modelo 1) = `r round(mod1$dic$dic, 2)`; DIC (Modelo 2) = `r round(mod2$dic$dic, 2)`; WAIC (Modelo 1) = `r round(mod1$waic$waic, 2)`; WAIC (Modelo 2) = `r round(mod2$waic$waic, 2)`. Media posterior de $\sigma_u$ = `r round(inla.emarginal(identity, sd_re), 4)`. Por tanto, incluiremos el efecto aleatorio año en nuestro modelo. 
+
+</details>
+
+
+
+# Predicción posterior de la media
+
+Se calcula la distribución posterior de la **media condicional** de la proporción observada para una malla de valores de `dd`, incluyendo un **año nuevo** (2016). Para ello se añaden filas con respuesta desconocida (`NA`) y se vuelve a ajustar el Modelo 2 utilizando esas filas como puntos de predicción.
+
+**Atención:** las bandas representadas describen la incertidumbre posterior de la media condicional, no intervalos predictivos de una observación. La Pregunta 4 se resuelve leyendo exclusivamente el gráfico.
+
+```{r, echo= TRUE, warning= FALSE, message= FALSE}
+### ----- 4.2. Predictions --- ####
+
+x_dd <- seq(5, 40, 0.5)
+
+data_pred <- data.frame(y = NA,
+                        year = 2016,
+                        dd   = x_dd,
+                        year_ind = (max(data$year_ind) + 1))
+
+data_total <- rbind(data,
+                    data_pred)
+
+
+formula2
+mod2.pred <- inla(formula2,
+                  family            = "beta",
+                  data              = data_total,
+                  control.family    = list(link  = "logit", hyper = prior_beta),
+             control.fixed     = prior_fijos,
+                  control.compute   = list(config = TRUE,
+                                           dic    = TRUE, 
+                                           cpo    = TRUE, 
+                                           waic   = TRUE),
+                  control.predictor = list(compute = TRUE,
+                                           link    = 1), 
+                  control.mode      = list(theta = mod2$mode$theta,
+                                            restart = TRUE),
+                  verbose = FALSE)
+
+```
+
+```{r}
+  predictive <- mod2.pred$summary.fitted.values[-c(1:dim(data)[1]),]
+  predictive <- cbind(data_pred, predictive)
+  colnames(predictive) <- c("y", "year", "dd", "year_ind", "mean", "sd", "Quant025", "Quant50", "Quant975", "mode")
+```
+
+```{r}
+  ggplot() +
+    geom_line(data = predictive, aes(x = dd, y = Quant50)) +
+    geom_ribbon(data = predictive, 
+                aes(x = dd,
+                    ymin = Quant025, 
+                    ymax = Quant975), alpha = 0.1) +
+  geom_point(data = data, aes(x = dd, y = y, col = year))+
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  scale_color_brewer(palette="Dark2") +
+  xlab("dd ( x 100)")
+  
+```
+
+
+# Pregunta 4. Interpretación gráfica para 600 grados-día
+
+Supongamos que en una campaña se han acumulado **1000 grados-día** (`dd = 10` en los datos). **Utiliza exclusivamente el gráfico anterior; no es necesario escribir ni ejecutar código adicional.**
+
+1. Aproxima la **proporción media de ascosporas liberadas** que predice el modelo y su **intervalo de credibilidad posterior del 95 % para la media**.
+
+2. Según el gráfico, ¿parece plausible que la proporción media liberada haya superado el **20 %**? Razona tu respuesta comparando el 20 % con la estimación y la banda de credibilidad.
+
+<details markdown="1">
+<summary><strong>Ver solución orientativa — Pregunta 4</strong></summary>
+
+**1. Predicción a 1000 grados-día.** Leyendo el gráfico en `dd = 10`, la **mediana posterior de la proporción media** de ascosporas liberadas es aproximadamente **0,04 (4 %)**. La banda sombreada indica un **intervalo de credibilidad posterior del 95 %** aproximadamente **[0,02; 0,17] (2 %–17 %)**. Estos valores se leen visualmente y, por tanto, son aproximados.
+
+**2. ¿Se ha superado el 20 %?** **No parece plausible a la vista del gráfico:** el 20 % está **por encima del límite superior** de la banda de credibilidad del 95 % (aproximadamente 17 %), mientras que la mediana estimada ronda el 4 %. Por tanto, el gráfico ofrece evidencia clara de que la proporción media todavía no ha alcanzado el 20 % a los 1000 grados-día.
+
+
+</details>
+
+
