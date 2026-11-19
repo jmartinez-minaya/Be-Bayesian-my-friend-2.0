@@ -1,0 +1,73 @@
+---
+title: "Computational checks in R-INLA"
+author: "Joaquín Martínez-Minaya"
+date: "`r Sys.Date()`"
+linestretch: "1.5"
+
+output:
+  bookdown::html_document2:
+    #theme: cerulean
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+# Checking the INLA output
+
+After fitting a spatial model with `verbose = TRUE`, we focus on **three simple checks**.
+
+## 1. Has INLA found the mode?
+
+First, we want to see that the numerical optimiser has successfully located the **mode of the (approximated) posterior distribution of the hyperparameters**.
+
+```text
+Iter=1 |grad|=0.00142(pass) |dx|=0.000889(pass) |df|=4.66e-07(pass)
+Iter=2 |grad|=0.000209(pass) |df|=3.33e-07(pass)
+maxld= -658.6970   theta= 5.5242 3.9531
+```
+
+The gradient is close to zero, the objective function barely changes, and the estimated hyperparameters are stable. **These are good signs that INLA has found the mode.** The optimiser's `pass` indicators refer to individual stopping checks; not every check is marked `pass` in the second iteration.
+
+## 2. Is the Hessian well conditioned?
+
+Next, we examine the Hessian matrix at the mode.
+
+```text
+GMRFLib_opt_estimate_hessian: ensure spd for Hessian: mode seems fine
+number of negative eigenvalues=[0]
+Eigenvalues of the Hessian
+    0.667
+    3.408
+```
+
+Both eigenvalues are positive, so the Hessian is **positive definite**. Also, the condition number is approximately $3.408/0.667 = 5.11$, which is small: **the Hessian is reasonably well conditioned**. There is no indication of a nearly flat direction causing numerical instability here.
+
+## 3. Are the corrected standard deviations close to 1?
+
+Finally, INLA compares the local Gaussian curvature with the curvature estimated separately on each side of the mode:
+
+```text
+Compute corrected stdev for theta[0]: negative 0.686  positive 1.458
+Compute corrected stdev for theta[1]: negative 0.859  positive 1.164
+```
+
+**Values near 1** indicate that the local Gaussian approximation describes the posterior shape reasonably well in that direction. Here, the corrections for `theta[1]` are relatively close to 1, whereas those for `theta[0]` show **more noticeable asymmetry**. They are not, on their own, evidence of computational failure.
+
+# Mathematical intuition (optional)
+
+Near the estimated mode $\hat{\boldsymbol\theta}$, a second-order Taylor expansion gives
+
+$$
+\log \widetilde\pi(\boldsymbol\theta\mid\boldsymbol y)
+\approx
+\log \widetilde\pi(\hat{\boldsymbol\theta}\mid\boldsymbol y)
+-\frac12(\boldsymbol\theta-\hat{\boldsymbol\theta})^\top
+H(\boldsymbol\theta-\hat{\boldsymbol\theta}),
+$$
+
+where $H=-\nabla^2\log\widetilde\pi(\boldsymbol\theta\mid\boldsymbol y)$ at the mode. Therefore, the **local Gaussian approximation** has covariance $H^{-1}$. A positive-definite, well-conditioned $H$ gives a stable local approximation; the corrected standard-deviation factors help identify departures from that quadratic shape away from the mode.
+
+**Conclusion:** The mode search and Hessian look numerically satisfactory. The corrected factors are fairly close to 1 for `theta[1]`, with more asymmetry for `theta[0]`.

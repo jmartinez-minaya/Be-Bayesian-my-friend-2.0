@@ -36,7 +36,7 @@ mod1.seeds = inla(formula1,
 summary(mod1.seeds)
 
 inla.pmarginal(0, mod1.seeds$marginals.fixed$x1ae73)
-inla.pmarginal(0, mod1.seeds$marginals.fixed$x1)
+inla.pmarginal(0, mod1.seeds$marginals.fixed$x2cucumber)
 
 
 mod1.seeds$marginals.fixed$x1ae73 %>% plot(., type = "l")
